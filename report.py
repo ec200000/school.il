@@ -45,8 +45,21 @@ def fail(message):
     sys.exit(1)
 
 
+def tail_log(path, lines=12):
+    """The last few lines of a captured log — where the traceback ends up."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return "".join(fh.readlines()[-lines:]).strip()
+    except OSError:
+        return ""
+
+
 if RENDER_RESULT and RENDER_RESULT != "success":
-    fail("⚠️ הרינדור נכשל. בדוק את לוג ה-Actions — הוידוי לא תוזמן.")
+    detail = tail_log("/tmp/render.log")
+    fail(
+        "⚠️ הרינדור נכשל — הוידוי לא תוזמן.\n\n"
+        + (detail[-1200:] if detail else "אין פרטים; בדוק את לוג ה-Actions.")
+    )
 
 # Staging is what makes the picture reachable by Instagram. Without it the
 # publish would fail later with nothing to point at, so refuse to offer the
