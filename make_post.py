@@ -30,6 +30,12 @@ CLEARANCE  = 8             # gap kept above the wave/avatar
 BASE_SIZE  = 140
 MIN_SIZE   = 60
 
+# The horizontal band the text lives in, and its centre. A full-width block
+# spans exactly BAND_LEFT..RIGHT_EDGE, so centring leaves those posts untouched
+# and only re-centres the ones narrower than the band.
+BAND_LEFT   = RIGHT_EDGE - MAX_W
+BAND_CENTRE = (BAND_LEFT + RIGHT_EDGE) // 2
+
 # safe_bottom[left_x] = lowest y the text may occupy when its ink spans
 # [left_x, RIGHT_EDGE]. Precomputed from the alpha of the wave, the avatar and
 # the footer, so a narrow block is allowed to sit lower than a wide one -- the
@@ -165,7 +171,15 @@ def place(ink):
     would throw away exactly the space at the bottom of the design that is most
     usable.
     """
-    x = RIGHT_EDGE - ink.width
+    # Centre the block in the text band rather than pinning its right edge.
+    #
+    # The LINES are right-aligned to each other -- that is what the design does
+    # and it is what makes Hebrew read correctly. But the block as a whole
+    # belongs in the middle of the plate. Pinning the right edge is identical
+    # for a full-width block, and pushes a short one hard against the right with
+    # a large empty gap on the left.
+    x = BAND_CENTRE - ink.width // 2
+    x = max(BAND_LEFT, min(x, RIGHT_EDGE - ink.width))
     px = ink.load()
     limit = None
     for row in range(ink.height):
