@@ -31,11 +31,16 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
 
+      # Capture the traceback. A step that just reports "failure" sends you to
+      # the Actions log to find out why, which is exactly what the Telegram
+      # report exists to avoid.
       - name: Render
         id: render
         env:
           CONFESSION_TEXT: ${{ github.event.client_payload.text }}
-        run: python3 make_image.py
+        run: |
+          set -o pipefail
+          python3 make_image.py 2>&1 | tee /tmp/render.log
 
       # Instagram fetches the picture from a URL, so it has to be reachable
       # without a token. raw.githubusercontent.com serves public repos directly.
