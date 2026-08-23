@@ -52,32 +52,55 @@ jobs:
         id: stage
         env:
           MEDIA_NAME: ${{ github.event.client_payload.media }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$MEDIA_NAME" || { echo "no media name in payload"; exit 1; }
 
+          # Staging happens in its own directory, NOT by switching branches in
+          # the workspace. Two reasons, both learned the hard way:
+          #
+          #   * git refuses to check out over untracked files, and the render
+          #     leaves post.jpg and __pycache__ behind — so a checkout aborts on
+          #     every run after the first.
+          #   * the later step needs post.jpg and report.py to still be there.
+          #     Switching the workspace to a branch that contains neither takes
+          #     them away.
+          WORK="${RUNNER_TEMP}/media"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          cp post.jpg "$WORK/../$MEDIA_NAME"
+
+          cd "$WORK"
+          git init -q
           git config user.name  "vidui-bot"
           git config user.email "vidui-bot@users.noreply.github.com"
+          git remote add origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          cp post.jpg "/tmp/$MEDIA_NAME"
-
-          if git fetch origin media --depth=1 2>/dev/null; then
-            git checkout -B media FETCH_HEAD
+          # Start from the existing branch when there is one, so images already
+          # waiting for a scheduled slot survive.
+          if git fetch --depth=1 origin media 2>/dev/null; then
+            git checkout -q FETCH_HEAD
+            git checkout -qb media
           else
-            git checkout --orphan media
-            git rm -rf --cached . >/dev/null 2>&1 || true
-            find . -maxdepth 1 -type f ! -name '*.jpg' -delete
+            git checkout -qb media
           fi
 
-          cp "/tmp/$MEDIA_NAME" "./$MEDIA_NAME"
+          # The branch carries staged images and nothing else. An earlier
+          # version of this workflow committed post.jpg and __pycache__ onto it
+          # by mistake; this clears them out for good.
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'post-*.jpg' -exec rm -rf {} +
 
-          # Keep the branch from growing without limit. Anything older than 30
-          # days is long past its publish time, scheduled or not.
-          find . -maxdepth 1 -name '*.jpg' -mtime +30 -delete || true
+          cp "$WORK/../$MEDIA_NAME" "./$MEDIA_NAME"
+
+          # Keep the branch bounded. Filenames start with the Apps Script key,
+          # which is an epoch timestamp, so a plain sort is chronological —
+          # mtime would not work here, since checkout stamps everything now.
+          ls -1 post-*.jpg 2>/dev/null | sort | head -n -60 | xargs -r rm -f
 
           git add -A
           git commit -q -m "stage $MEDIA_NAME" || echo "nothing to commit"
-          git push origin HEAD:media
+          git push -q origin HEAD:media
 
           echo "url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/media/${MEDIA_NAME}" >> $GITHUB_OUTPUT
 
