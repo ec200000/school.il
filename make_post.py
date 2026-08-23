@@ -3,8 +3,21 @@
 import sys, os, re, json, argparse
 from PIL import Image, ImageDraw, ImageFont
 
-HERE   = os.path.dirname(os.path.abspath(__file__))
-ASSETS = os.path.join(os.path.dirname(HERE), 'assets')
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# The three assets live in two different layouts and this file is shared by
+# both: beside the script in the flat GitHub repo, and in a sibling assets/
+# directory in the skill. Probing for the plate rather than assuming one layout
+# means copying this file between them cannot silently break the other.
+_CANDIDATES = [
+    HERE,                                          # flat: repo root
+    os.path.join(os.path.dirname(HERE), 'assets'),  # skill: scripts/ + assets/
+    os.path.join(HERE, 'assets'),                   # assets/ underneath
+]
+ASSETS = next(
+    (d for d in _CANDIDATES if os.path.exists(os.path.join(d, 'template_plate.webp'))),
+    HERE,
+)
 PLATE  = os.path.join(ASSETS, 'template_plate.webp')
 FONT   = os.path.join(ASSETS, 'RubikBold-subset.ttf')
 
